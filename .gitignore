@@ -22,3 +22,6 @@ go.work
 
 # vs temp files
 .vs
+
+#datastore
+data.csv
