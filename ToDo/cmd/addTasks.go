@@ -63,9 +63,7 @@ var addTasksCmd = &cobra.Command{
 
 		if confirmed {
 			for _, element := range inputs {
-				datastore.GreatestID += 1
 				datastore.Store(structs.Task{
-					ID:          datastore.GreatestID,
 					Name:        element,
 					Description: "",
 				})
