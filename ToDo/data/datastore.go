@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"strconv"
 )
 
 var Reader *csv.Reader
@@ -15,16 +16,32 @@ var tasks_cache []structs.Task = nil
 func init() {
 }
 
-func InitVariables(datastore_path string) {
-	file, err := os.OpenFile(datastore_path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+func InitVariables(main_path string) {
+	file, err := os.OpenFile(main_path+"\\data\\data.csv", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Println("Could not open datastore.")
+		panic(err)
+	}
+	Reader = csv.NewReader(file)
+	for line, err := Reader.Read(); line != nil && err != nil; {
+		id, err := strconv.Atoi(line[0])
+		if err != nil {
+			GreatestID = id
+		}
+	}
+	err = file.Close()
+	if err != nil {
+		fmt.Println("Could not close datastore.")
+		panic(err)
+	}
+
+	file, err = os.OpenFile(main_path+"\\data\\data.csv", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		fmt.Println("Could not open datastore.")
 		panic(err)
 	}
 	Reader = csv.NewReader(file)
 	Writer = csv.NewWriter(file)
-
-	FetchAll()
 }
 
 func FetchAll() []structs.Task {

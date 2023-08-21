@@ -6,6 +6,7 @@ package main
 import (
 	"ToDo/cmd"
 	datastore "ToDo/data"
+	debugger "ToDo/debug"
 	"fmt"
 	"os"
 )
@@ -16,7 +17,8 @@ func main() {
 		fmt.Println("Couldn't get working directory.")
 		panic(err)
 	}
-	datastore.InitVariables(path + "\\data\\data.csv")
+	datastore.InitVariables(path)
+	debugger.InitVariables(path)
 
 	cmd.Execute()
 }

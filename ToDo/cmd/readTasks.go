@@ -6,9 +6,7 @@ package cmd
 import (
 	datastore "ToDo/data"
 	"ToDo/structs"
-	"fmt"
 
-	"github.com/eiannone/keyboard"
 	"github.com/spf13/cobra"
 )
 
@@ -23,37 +21,7 @@ var readTasksCmd = &cobra.Command{
 			Tasks:           datastore.FetchAll(),
 		}
 
-		keys, err := keyboard.GetKeys(1)
-		if err != nil {
-			fmt.Println("error setting up keyboard buffer")
-			panic(err)
-		}
-		defer keyboard.Close()
-
-		for {
-			menu.Print()
-			fmt.Printf("\033[%dA", 2*len(menu.Tasks)-2*menu.Focused_Task_Id)
-
-			keyEvent := <-keys
-			if keyEvent.Err != nil {
-				fmt.Println("error getting key")
-				panic(err)
-			}
-
-			if menu.Focused_Task_Id != 0 {
-				fmt.Printf("\033[%dA", 2*menu.Focused_Task_Id)
-			}
-
-			switch keyEvent.Key {
-			case keyboard.KeyArrowUp:
-				menu.MoveCursorUp()
-			case keyboard.KeyArrowDown:
-				menu.MoveCursorDown()
-			case keyboard.KeyEsc:
-				fmt.Printf("\033[%dB", 2*len(menu.Tasks))
-				return
-			}
-		}
+		menu.Display()
 	},
 }
 
