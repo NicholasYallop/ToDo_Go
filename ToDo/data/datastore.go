@@ -4,6 +4,7 @@ import (
 	structs "ToDo/structs"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 )
@@ -14,34 +15,30 @@ var GreatestID int = 0
 var tasks_cache []structs.Task = nil
 
 func init() {
-}
-
-func InitVariables(main_path string) {
-	file, err := os.OpenFile(main_path+"\\data\\data.csv", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	file, err := os.OpenFile("./data/data.csv", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		fmt.Println("Could not open datastore.")
 		panic(err)
 	}
-	Reader = csv.NewReader(file)
-	for line, err := Reader.Read(); line != nil && err != nil; {
-		id, err := strconv.Atoi(line[0])
-		if err != nil {
-			GreatestID = id
-		}
-	}
-	err = file.Close()
-	if err != nil {
-		fmt.Println("Could not close datastore.")
-		panic(err)
-	}
 
-	file, err = os.OpenFile(main_path+"\\data\\data.csv", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		fmt.Println("Could not open datastore.")
-		panic(err)
-	}
 	Reader = csv.NewReader(file)
 	Writer = csv.NewWriter(file)
+
+	for {
+		line, err := Reader.Read()
+		if err == io.EOF {
+			break
+		}
+
+		id, err := strconv.Atoi(line[0])
+		if err != nil {
+			panic(err)
+		}
+
+		GreatestID = max(GreatestID, id)
+	}
+
+	file.Seek(0, io.SeekStart)
 }
 
 func FetchAll() []structs.Task {
