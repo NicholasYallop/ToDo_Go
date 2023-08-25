@@ -20,6 +20,7 @@ type Menu struct {
 	Tasks           []Task
 	Focused_Task_Id int
 	Editing         EditingField
+	OutputChannel   chan []Task
 }
 
 func (menu Menu) Print() (cursorRow int) {
@@ -95,6 +96,7 @@ func (menu *Menu) EnterKeyPressed() {
 	case Tasks:
 		menu.Editing = Descriptions
 	case Descriptions:
+		menu.OutputChannel <- menu.Tasks
 		menu.Editing = Tasks
 	}
 }
@@ -103,6 +105,7 @@ func (menu *Menu) EscKeyPressed() (kill bool) {
 	switch menu.Editing {
 	case Tasks:
 		fmt.Printf("\033[%dB", 2*len(menu.Tasks))
+		menu.OutputChannel <- nil
 		return true
 	case Descriptions:
 		menu.Editing = Tasks

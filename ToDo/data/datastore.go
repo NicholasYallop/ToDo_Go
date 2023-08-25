@@ -11,11 +11,14 @@ import (
 
 var Reader *csv.Reader
 var Writer *csv.Writer
-var GreatestID int = 0
+var GreatestID int = -1
 var tasks_cache []structs.Task = nil
+var file *os.File
+var datastore_path string = "./data/data.csv"
 
 func init() {
-	file, err := os.OpenFile("./data/data.csv", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	var err error
+	file, err = os.OpenFile(datastore_path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		fmt.Println("Could not open datastore.")
 		panic(err)
@@ -67,6 +70,7 @@ func FetchAll() []structs.Task {
 func Store(task structs.Task) {
 	GreatestID += 1
 	task.ID = GreatestID
+
 	Writer.Write(task.ToCsvLine())
 	Writer.Flush()
 	err := Writer.Error()
@@ -77,4 +81,35 @@ func Store(task structs.Task) {
 	} else {
 		tasks_cache = nil
 	}
+}
+
+func Overwrite(tasks []structs.Task) {
+	err := file.Close()
+	if err != nil {
+		println("Could not close datastore.")
+		println(err.Error())
+		panic(err)
+	}
+
+	err = os.Remove(datastore_path)
+	if err != nil {
+		println("Could not delete old datastore.")
+		panic(err)
+	}
+
+	file, err = os.OpenFile(datastore_path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		println("Could not reopen file after deletion.")
+		panic(err)
+	}
+
+	Reader = csv.NewReader(file)
+	Writer = csv.NewWriter(file)
+
+	taskstrings := [][]string{}
+	for _, task := range tasks {
+		taskstrings = append(taskstrings, task.ToCsvLine())
+	}
+	Writer.WriteAll(taskstrings)
+	tasks_cache = nil
 }
