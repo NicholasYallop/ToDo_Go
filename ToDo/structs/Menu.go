@@ -4,6 +4,7 @@ import (
 	style "ToDo/defs"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/eiannone/keyboard"
 	"github.com/nerdmaster/terminal"
@@ -23,34 +24,107 @@ type Menu struct {
 	OutputChannel   chan []Task
 }
 
+type TaskStrings struct {
+	taskString string
+	descString string
+}
+
+func (menu *Menu) TaskStrings(index int) (taskStrings TaskStrings) {
+	task := menu.Tasks[index]
+
+	var taskString string
+	var descString string
+
+	if index == menu.Focused_Task_Id {
+		if menu.Editing == Tasks {
+			taskString = style.Default_Style.Render("> " + task.Name)
+			descString = style.Remark_Style.Render(task.Description)
+		}
+		if menu.Editing == Descriptions {
+			taskString = style.Default_Style.Render(task.Name)
+			descString = style.Remark_Style.Render("> " + task.Description)
+		}
+	} else {
+		taskString = style.Default_Style.Render(task.Name)
+		descString = style.Remark_Style.Render(task.Description)
+	}
+
+	return TaskStrings{
+		taskString: taskString,
+		descString: descString,
+	}
+}
+
 func (menu Menu) Print() (cursorRow int) {
-	_, height, err := terminal.GetSize(int(os.Stdout.Fd()))
+	_, terminalHeight, err := terminal.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
 		fmt.Println("Error while printing.")
 		panic(err)
 	}
 
-	printStartIndex := min(menu.Focused_Task_Id, max(len(menu.Tasks)*2-height, 0))
-	for index, task := range menu.Tasks {
-		if index >= printStartIndex && index <= printStartIndex+(height/2-height%2) {
-			if index == menu.Focused_Task_Id {
-				if menu.Editing == Tasks {
-					fmt.Println(style.Default_Style.Render("> " + task.Name))
-					fmt.Println(style.Remark_Style.Render(task.Description))
-				} else if menu.Editing == Descriptions {
-					fmt.Println(style.Default_Style.Render(task.Name))
-					fmt.Println(style.Remark_Style.Render("> " + task.Description))
-				}
-			} else {
-				fmt.Println(style.Default_Style.Render(task.Name))
-				fmt.Println(style.Remark_Style.Render(task.Description))
-			}
+	// print from startindex, height of at most terminal height
+	stringBuffer := ""
+	focusedLine := 0
+	currentLine := 0
+
+	for i := 0; i < len(menu.Tasks); i++ {
+		printData := menu.TaskStrings(i)
+		if i == menu.Focused_Task_Id && menu.Editing == Tasks {
+			focusedLine = currentLine
+		}
+
+		for _, line := range strings.Split(printData.taskString, "\n") {
+			stringBuffer += line + "\n"
+			currentLine++
+		}
+
+		if i == menu.Focused_Task_Id && menu.Editing == Descriptions {
+			focusedLine = currentLine
+		}
+		for _, line := range strings.Split(printData.descString, "\n") {
+			stringBuffer += line + "\n"
+			currentLine++
 		}
 	}
 
+	printHeight := 0
+	cursorReset := 0
+	if terminalHeight >= currentLine {
+		// print all lines
+		fmt.Print(strings.Trim(stringBuffer, "\n"))
+		printHeight = currentLine - 1
+		cursorReset = focusedLine
+
+	} else if focusedLine <= currentLine-terminalHeight {
+		// print from focused up to terminal height
+		lines := strings.Split(stringBuffer, "\n")
+
+		i := 0
+		for i < terminalHeight-1 {
+			fmt.Println(lines[focusedLine+i])
+			i++
+		}
+		fmt.Print(lines[i])
+		printHeight = terminalHeight
+		cursorReset = 0
+
+	} else {
+		// print from end-terminalHeight up to end
+		lines := strings.Split(stringBuffer, "\n")
+
+		i := len(lines) - terminalHeight
+		for i < len(lines)-1 {
+			fmt.Println(lines[i])
+			i++
+		}
+		fmt.Print(lines[i])
+		printHeight = terminalHeight
+		cursorReset = focusedLine - (len(lines) - terminalHeight) + 1
+	}
+
 	// move cursor up to focused Id
-	fmt.Printf("\033[%dA", min((len(menu.Tasks))*2, height)-(menu.Focused_Task_Id-printStartIndex)*2)
-	return (menu.Focused_Task_Id - printStartIndex) * 2
+	fmt.Printf("\033[%dF", printHeight-cursorReset)
+	return cursorReset
 }
 
 func (x *Menu) MoveCursorUp() (success bool) {
@@ -119,6 +193,10 @@ func (menu *Menu) DefaultKeyPress(event keyboard.KeyEvent) {
 		if event.Key == keyboard.KeyBackspace {
 			desc := menu.Tasks[menu.Focused_Task_Id].Description
 			menu.Tasks[menu.Focused_Task_Id].Description = desc[0:max(len(desc)-1, 0)]
+			return
+		} else if event.Key == keyboard.KeySpace {
+			desc := menu.Tasks[menu.Focused_Task_Id].Description
+			menu.Tasks[menu.Focused_Task_Id].Description = desc + " "
 			return
 		}
 		menu.Tasks[menu.Focused_Task_Id].Description += string(event.Rune)

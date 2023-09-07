@@ -1,6 +1,8 @@
 package structs
 
-import "strconv"
+import (
+	"strconv"
+)
 
 type Task struct {
 	ID          int
