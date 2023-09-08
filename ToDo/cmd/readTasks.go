@@ -17,9 +17,12 @@ var readTasksCmd = &cobra.Command{
 	Short: "Read all stored tasks.",
 	Long:  `Read all stored tasks.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		tasks := datastore.FetchAll()
+		firstTask := &tasks[0]
+
 		menu := structs.Menu{
-			Focused_Index: 0,
-			Tasks:         datastore.FetchAll(),
+			Focused_Task:  firstTask,
+			Tasks:         tasks,
 			OutputChannel: make(chan []structs.Task),
 		}
 

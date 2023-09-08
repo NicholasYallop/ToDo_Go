@@ -19,23 +19,22 @@ const (
 
 type Menu struct {
 	Tasks         []Task
-	Focused_Index int
+	Focused_Task  *Task
 	Editing       EditingField
 	OutputChannel chan []Task
 }
 
 type TaskStrings struct {
-	taskString string
-	descString string
+	taskStrings []string
+	descStrings []string
 }
 
-func (menu *Menu) TaskStrings(index int) (taskStrings TaskStrings) {
-	task := menu.Tasks[index]
+func (menu *Menu) TaskStrings(index int) (taskStrings TaskStrings, focused bool) {
+	task := &menu.Tasks[index]
 
 	var taskString string
 	var descString string
-
-	if index == menu.Focused_Index {
+	if menu.Focused_Task == task {
 		if menu.Editing == Tasks {
 			taskString = style.Default_Style.Render("> " + task.Name)
 			descString = style.Remark_Style.Render(task.Description)
@@ -44,15 +43,17 @@ func (menu *Menu) TaskStrings(index int) (taskStrings TaskStrings) {
 			taskString = style.Default_Style.Render(task.Name)
 			descString = style.Remark_Style.Render("> " + task.Description)
 		}
+		focused = true
 	} else {
 		taskString = style.Default_Style.Render(task.Name)
 		descString = style.Remark_Style.Render(task.Description)
+		focused = false
 	}
 
 	return TaskStrings{
-		taskString: taskString,
-		descString: descString,
-	}
+		taskStrings: strings.Split(taskString, "\n"),
+		descStrings: strings.Split(descString, "\n"),
+	}, focused
 }
 
 func (menu Menu) Print() (cursorRow int) {
@@ -63,42 +64,41 @@ func (menu Menu) Print() (cursorRow int) {
 	}
 
 	// print from startindex, height of at most terminal height
-	stringBuffer := ""
 	focusedLine := 0
-	currentLine := 0
+	var lines []string
 
 	for i := 0; i < len(menu.Tasks); i++ {
-		printData := menu.TaskStrings(i)
-		if i == menu.Focused_Index && menu.Editing == Tasks {
-			focusedLine = currentLine
+		printData, focused := menu.TaskStrings(i)
+
+		if focused && menu.Editing == Tasks {
+			focusedLine = len(lines)
 		}
 
-		for _, line := range strings.Split(printData.taskString, "\n") {
-			stringBuffer += line + "\n"
-			currentLine++
+		lines = append(lines, printData.taskStrings...)
+
+		if focused && menu.Editing == Descriptions {
+			focusedLine = len(lines)
 		}
 
-		if i == menu.Focused_Index && menu.Editing == Descriptions {
-			focusedLine = currentLine
-		}
-		for _, line := range strings.Split(printData.descString, "\n") {
-			stringBuffer += line + "\n"
-			currentLine++
-		}
+		lines = append(lines, printData.descStrings...)
 	}
 
 	printHeight := 0
 	cursorReset := 0
-	if terminalHeight >= currentLine {
+	if terminalHeight >= len(lines) {
 		// print all lines
-		fmt.Print(strings.Trim(stringBuffer, "\n"))
-		printHeight = currentLine - 1
+		for index, line := range lines {
+			if index == len(lines)-1 {
+				fmt.Print(line)
+			} else {
+				fmt.Println(line)
+			}
+		}
+		printHeight = len(lines) - 1
 		cursorReset = focusedLine
 
-	} else if focusedLine <= currentLine-terminalHeight {
+	} else if focusedLine <= len(lines)-terminalHeight {
 		// print from focused up to terminal height
-		lines := strings.Split(stringBuffer, "\n")
-
 		i := 0
 		for i < terminalHeight-1 {
 			fmt.Println(lines[focusedLine+i])
@@ -110,8 +110,6 @@ func (menu Menu) Print() (cursorRow int) {
 
 	} else {
 		// print from end-terminalHeight up to end
-		lines := strings.Split(stringBuffer, "\n")
-
 		i := len(lines) - terminalHeight
 		for i < len(lines)-1 {
 			fmt.Println(lines[i])
@@ -127,17 +125,27 @@ func (menu Menu) Print() (cursorRow int) {
 	return cursorReset
 }
 
-func (x *Menu) MoveCursorUp() (success bool) {
-	if x.Focused_Index > 0 {
-		x.Focused_Index--
+func (menu *Menu) MoveCursorUp() (success bool) {
+	if menu.Focused_Task != &menu.Tasks[0] {
+		for index := range menu.Tasks {
+			if &menu.Tasks[index] == menu.Focused_Task {
+				menu.Focused_Task = &menu.Tasks[index-1]
+			}
+		}
 		return true
 	}
+
 	return false
 }
 
-func (x *Menu) MoveCursorDown() (success bool) {
-	if x.Focused_Index < len(x.Tasks)-1 {
-		x.Focused_Index++
+func (menu *Menu) MoveCursorDown() (success bool) {
+	if menu.Focused_Task != &menu.Tasks[len(menu.Tasks)-1] {
+		for index := range menu.Tasks {
+			if &menu.Tasks[index] == menu.Focused_Task {
+				menu.Focused_Task = &menu.Tasks[index+1]
+				break
+			}
+		}
 		return true
 	}
 	return false
@@ -191,15 +199,15 @@ func (menu *Menu) DefaultKeyPress(event keyboard.KeyEvent) {
 	switch menu.Editing {
 	case Descriptions:
 		if event.Key == keyboard.KeyBackspace {
-			desc := menu.Tasks[menu.Focused_Index].Description
-			menu.Tasks[menu.Focused_Index].Description = desc[0:max(len(desc)-1, 0)]
+			desc := menu.Focused_Task.Description
+			menu.Focused_Task.Description = desc[0:max(len(desc)-1, 0)]
 			return
 		} else if event.Key == keyboard.KeySpace {
-			desc := menu.Tasks[menu.Focused_Index].Description
-			menu.Tasks[menu.Focused_Index].Description = desc + " "
+			desc := menu.Focused_Task.Description
+			menu.Focused_Task.Description = desc + " "
 			return
 		}
-		menu.Tasks[menu.Focused_Index].Description += string(event.Rune)
+		menu.Focused_Task.Description += string(event.Rune)
 	}
 }
 

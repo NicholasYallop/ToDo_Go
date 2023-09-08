@@ -9,6 +9,7 @@ type Task struct {
 	Name        string
 	Description string
 	SubTasks    TaskSlice
+	Complete    bool
 }
 
 type TaskSlice []Task
