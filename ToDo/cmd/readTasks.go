@@ -18,9 +18,9 @@ var readTasksCmd = &cobra.Command{
 	Long:  `Read all stored tasks.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		menu := structs.Menu{
-			Focused_Task_Id: 0,
-			Tasks:           datastore.FetchAll(),
-			OutputChannel:   make(chan []structs.Task),
+			Focused_Index: 0,
+			Tasks:         datastore.FetchAll(),
+			OutputChannel: make(chan []structs.Task),
 		}
 
 		debugger.Trace("starting")
@@ -32,7 +32,7 @@ var readTasksCmd = &cobra.Command{
 			tasks := <-menu.OutputChannel
 			if tasks != nil {
 				debugger.Trace("overwrote")
-				datastore.Overwrite(tasks)
+				datastore.SetCache(tasks)
 			} else {
 				debugger.Trace("escaped")
 				break

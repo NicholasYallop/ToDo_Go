@@ -1,24 +1,33 @@
 package structs
 
 import (
-	"strconv"
+	"encoding/json"
+	"fmt"
 )
 
 type Task struct {
-	ID          int
 	Name        string
 	Description string
+	SubTasks    TaskSlice
 }
 
-func (x *Task) ToCsvLine() []string {
-	return []string{strconv.Itoa(x.ID), x.Name, x.Description}
-}
+type TaskSlice []Task
 
-func TaskFromCsv(line []string) Task {
-	id, _ := strconv.Atoi(line[0])
-	return Task{
-		ID:          id,
-		Name:        line[1],
-		Description: line[2],
+func (tasks TaskSlice) ToJson() []byte {
+	result, err := json.Marshal(tasks)
+	if err != nil {
+		fmt.Println("err while converting task array to byte array")
+		panic(err)
 	}
+	return result
+}
+
+func TasksFromJson(bytes []byte) TaskSlice {
+	var tasks TaskSlice
+	err := json.Unmarshal(bytes, &tasks)
+	if err != nil {
+		fmt.Println("errr while converting string to task array")
+		panic(err)
+	}
+	return tasks
 }

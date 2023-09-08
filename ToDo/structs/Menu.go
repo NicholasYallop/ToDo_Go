@@ -18,10 +18,10 @@ const (
 )
 
 type Menu struct {
-	Tasks           []Task
-	Focused_Task_Id int
-	Editing         EditingField
-	OutputChannel   chan []Task
+	Tasks         []Task
+	Focused_Index int
+	Editing       EditingField
+	OutputChannel chan []Task
 }
 
 type TaskStrings struct {
@@ -35,7 +35,7 @@ func (menu *Menu) TaskStrings(index int) (taskStrings TaskStrings) {
 	var taskString string
 	var descString string
 
-	if index == menu.Focused_Task_Id {
+	if index == menu.Focused_Index {
 		if menu.Editing == Tasks {
 			taskString = style.Default_Style.Render("> " + task.Name)
 			descString = style.Remark_Style.Render(task.Description)
@@ -69,7 +69,7 @@ func (menu Menu) Print() (cursorRow int) {
 
 	for i := 0; i < len(menu.Tasks); i++ {
 		printData := menu.TaskStrings(i)
-		if i == menu.Focused_Task_Id && menu.Editing == Tasks {
+		if i == menu.Focused_Index && menu.Editing == Tasks {
 			focusedLine = currentLine
 		}
 
@@ -78,7 +78,7 @@ func (menu Menu) Print() (cursorRow int) {
 			currentLine++
 		}
 
-		if i == menu.Focused_Task_Id && menu.Editing == Descriptions {
+		if i == menu.Focused_Index && menu.Editing == Descriptions {
 			focusedLine = currentLine
 		}
 		for _, line := range strings.Split(printData.descString, "\n") {
@@ -128,16 +128,16 @@ func (menu Menu) Print() (cursorRow int) {
 }
 
 func (x *Menu) MoveCursorUp() (success bool) {
-	if x.Focused_Task_Id > 0 {
-		x.Focused_Task_Id--
+	if x.Focused_Index > 0 {
+		x.Focused_Index--
 		return true
 	}
 	return false
 }
 
 func (x *Menu) MoveCursorDown() (success bool) {
-	if x.Focused_Task_Id < len(x.Tasks)-1 {
-		x.Focused_Task_Id++
+	if x.Focused_Index < len(x.Tasks)-1 {
+		x.Focused_Index++
 		return true
 	}
 	return false
@@ -191,15 +191,15 @@ func (menu *Menu) DefaultKeyPress(event keyboard.KeyEvent) {
 	switch menu.Editing {
 	case Descriptions:
 		if event.Key == keyboard.KeyBackspace {
-			desc := menu.Tasks[menu.Focused_Task_Id].Description
-			menu.Tasks[menu.Focused_Task_Id].Description = desc[0:max(len(desc)-1, 0)]
+			desc := menu.Tasks[menu.Focused_Index].Description
+			menu.Tasks[menu.Focused_Index].Description = desc[0:max(len(desc)-1, 0)]
 			return
 		} else if event.Key == keyboard.KeySpace {
-			desc := menu.Tasks[menu.Focused_Task_Id].Description
-			menu.Tasks[menu.Focused_Task_Id].Description = desc + " "
+			desc := menu.Tasks[menu.Focused_Index].Description
+			menu.Tasks[menu.Focused_Index].Description = desc + " "
 			return
 		}
-		menu.Tasks[menu.Focused_Task_Id].Description += string(event.Rune)
+		menu.Tasks[menu.Focused_Index].Description += string(event.Rune)
 	}
 }
 

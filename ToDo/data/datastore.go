@@ -2,114 +2,47 @@ package datastore
 
 import (
 	structs "ToDo/structs"
-	"encoding/csv"
 	"fmt"
-	"io"
 	"os"
-	"strconv"
 )
 
-var Reader *csv.Reader
-var Writer *csv.Writer
-var GreatestID int = -1
-var tasks_cache []structs.Task = nil
-var file *os.File
-var datastore_path string = "./data/data.csv"
+var tasks_cache structs.TaskSlice = nil
+var datastore_path string = "./data/data.json"
 
-func init() {
-	var err error
-	file, err = os.OpenFile(datastore_path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		fmt.Println("Could not open datastore.")
-		panic(err)
+func AddToCache(task structs.Task) {
+	if tasks_cache == nil {
+		tasks_cache = structs.TaskSlice{}
 	}
-
-	Reader = csv.NewReader(file)
-	Writer = csv.NewWriter(file)
-
-	for {
-		line, err := Reader.Read()
-		if err == io.EOF {
-			break
-		}
-
-		id, err := strconv.Atoi(line[0])
-		if err != nil {
-			panic(err)
-		}
-
-		GreatestID = max(GreatestID, id)
-	}
-
-	file.Seek(0, io.SeekStart)
+	tasks_cache = append(tasks_cache, task)
 }
 
-func FetchAll() []structs.Task {
+func SetCache(tasks structs.TaskSlice) {
+	tasks_cache = tasks
+}
+
+func FetchAll() structs.TaskSlice {
 	if tasks_cache != nil {
 		return tasks_cache
 	}
 
-	records, err := Reader.ReadAll()
+	content, err := os.ReadFile(datastore_path)
 	if err != nil {
-		fmt.Println("Error while reading.")
+		fmt.Println("Error reading datastore file")
 		panic(err)
 	}
 
-	tasks_cache = []structs.Task{}
-	for _, record := range records {
-		task := structs.TaskFromCsv(record)
-		tasks_cache = append(tasks_cache, task)
-		if task.ID > GreatestID {
-			GreatestID = task.ID
-		}
-	}
-
+	tasks_cache = structs.TasksFromJson(content)
 	return tasks_cache
 }
 
-func Store(task structs.Task) {
-	GreatestID += 1
-	task.ID = GreatestID
-
-	Writer.Write(task.ToCsvLine())
-	Writer.Flush()
-	err := Writer.Error()
-	if err != nil {
-		GreatestID -= 1
-		fmt.Println("Error while writing.")
-		fmt.Println(err)
-	} else {
-		tasks_cache = nil
-	}
+func SaveCache() {
+	overwrite(tasks_cache)
 }
 
-func Overwrite(tasks []structs.Task) {
-	err := file.Close()
+func overwrite(tasks structs.TaskSlice) {
+	err := os.WriteFile(datastore_path, tasks.ToJson(), 0666)
 	if err != nil {
-		println("Could not close datastore.")
-		println(err.Error())
+		fmt.Println("Error writing new datastore")
 		panic(err)
 	}
-
-	err = os.Remove(datastore_path)
-	if err != nil {
-		println("Could not delete old datastore.")
-		panic(err)
-	}
-
-	file, err = os.OpenFile(datastore_path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		println("Could not reopen file after deletion.")
-		panic(err)
-	}
-
-	Reader = csv.NewReader(file)
-	Writer = csv.NewWriter(file)
-
-	taskstrings := [][]string{}
-	for _, task := range tasks {
-		taskstrings = append(taskstrings, task.ToCsvLine())
-	}
-	Writer.WriteAll(taskstrings)
-	tasks_cache = nil
 }

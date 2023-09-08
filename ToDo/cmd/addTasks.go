@@ -63,7 +63,7 @@ var addTasksCmd = &cobra.Command{
 
 		if confirmed {
 			for _, element := range inputs {
-				datastore.Store(structs.Task{
+				datastore.AddToCache(structs.Task{
 					Name:        element,
 					Description: "",
 				})
