@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/eiannone/keyboard"
 	"github.com/nerdmaster/terminal"
 )
@@ -36,18 +37,27 @@ func (menu *Menu) TaskStrings(index int) (taskStrings TaskStrings, focused bool)
 	var descString string
 	if menu.Focused_Task == task {
 		if menu.Editing == Tasks {
-			taskString = style.Default_Style.Render("> " + task.Name)
-			descString = style.Remark_Style.Render(task.Description)
+			taskString = "> " + task.Name
+			descString = task.Description
 		}
 		if menu.Editing == Descriptions {
-			taskString = style.Default_Style.Render(task.Name)
-			descString = style.Remark_Style.Render("> " + task.Description)
+			taskString = task.Name
+			descString = "> " + task.Description
 		}
 		focused = true
+
 	} else {
-		taskString = style.Default_Style.Render(task.Name)
-		descString = style.Remark_Style.Render(task.Description)
+		taskString = task.Name
+		descString = task.Description
 		focused = false
+	}
+
+	if task.Complete {
+		taskString = lipgloss.JoinHorizontal(lipgloss.Center, style.Defocused_Default_Style.Render(taskString), "{Θ}")
+		descString = style.Defocused_Remark_Style.Render(descString)
+	} else {
+		taskString = lipgloss.JoinHorizontal(lipgloss.Center, style.Default_Style.Render(taskString), "{ }")
+		descString = style.Remark_Style.Render(descString)
 	}
 
 	return TaskStrings{
@@ -208,6 +218,10 @@ func (menu *Menu) DefaultKeyPress(event keyboard.KeyEvent) {
 			return
 		}
 		menu.Focused_Task.Description += string(event.Rune)
+	case Tasks:
+		if event.Rune == 'c' {
+			menu.Focused_Task.Complete = !menu.Focused_Task.Complete
+		}
 	}
 }
 
