@@ -19,22 +19,23 @@ const (
 )
 
 type Menu struct {
-	Tasks         []Task
+	Tasks         TaskSlice
 	Focused_Task  *Task
 	Editing       EditingField
 	OutputChannel chan []Task
 }
 
 type TaskStrings struct {
-	taskStrings []string
-	descStrings []string
+	taskLines    []string
+	descLines    []string
+	subtaskLines []TaskStrings
+	focused      bool
 }
 
-func (menu *Menu) TaskStrings(index int) (taskStrings TaskStrings, focused bool) {
-	task := &menu.Tasks[index]
-
+func (menu *Menu) TaskStrings(task *Task) (taskStrings TaskStrings) {
 	var taskString string
 	var descString string
+	var focused bool
 	if menu.Focused_Task == task {
 		if menu.Editing == Tasks {
 			taskString = "> " + task.Name
@@ -60,10 +61,63 @@ func (menu *Menu) TaskStrings(index int) (taskStrings TaskStrings, focused bool)
 		descString = style.Remark_Style.Render(descString)
 	}
 
+	var subLines []TaskStrings
+
+	for _, subtask := range task.SubTasks {
+		subLines = append(subLines, menu.TaskStrings(&subtask))
+	}
+
 	return TaskStrings{
-		taskStrings: strings.Split(taskString, "\n"),
-		descStrings: strings.Split(descString, "\n"),
-	}, focused
+		taskLines:    strings.Split(taskString, "\n"),
+		descLines:    strings.Split(descString, "\n"),
+		subtaskLines: subLines,
+		focused:      focused,
+	}
+}
+
+func (menu *Menu) AppendToLines(lines *[]string, printData TaskStrings) (focusedLine int) {
+	if printData.focused && menu.Editing == Tasks {
+		focusedLine = len(*lines)
+	}
+
+	*lines = append(*lines, printData.taskLines...)
+
+	if printData.focused && menu.Editing == Descriptions {
+		focusedLine = len(*lines)
+	}
+
+	*lines = append(*lines, printData.descLines...)
+
+	return focusedLine
+}
+
+func (menu *Menu) FormattedPrintLines(tasks *TaskSlice) (lines []string, focusedRow int) {
+	focusedLine := 0
+
+	for i := 0; i < len(*tasks); i++ {
+		printData := menu.TaskStrings(&(*tasks)[i])
+
+		if printData.focused && menu.Editing == Tasks {
+			focusedLine = len(lines)
+		}
+
+		lines = append(lines, printData.taskLines...)
+
+		if printData.focused && menu.Editing == Descriptions {
+			focusedLine = len(lines)
+		}
+
+		lines = append(lines, printData.descLines...)
+
+		for _, taskStrings := range printData.subtaskLines {
+			returnedFocusedLine := menu.AppendToLines(&lines, taskStrings)
+
+			focusedLine = max(focusedLine, returnedFocusedLine)
+		}
+
+	}
+
+	return lines, focusedLine
 }
 
 func (menu Menu) Print() (cursorRow int) {
@@ -74,24 +128,7 @@ func (menu Menu) Print() (cursorRow int) {
 	}
 
 	// print from startindex, height of at most terminal height
-	focusedLine := 0
-	var lines []string
-
-	for i := 0; i < len(menu.Tasks); i++ {
-		printData, focused := menu.TaskStrings(i)
-
-		if focused && menu.Editing == Tasks {
-			focusedLine = len(lines)
-		}
-
-		lines = append(lines, printData.taskStrings...)
-
-		if focused && menu.Editing == Descriptions {
-			focusedLine = len(lines)
-		}
-
-		lines = append(lines, printData.descStrings...)
-	}
+	lines, focusedLine := menu.FormattedPrintLines(&menu.Tasks)
 
 	printHeight := 0
 	cursorReset := 0
@@ -135,6 +172,28 @@ func (menu Menu) Print() (cursorRow int) {
 	return cursorReset
 }
 
+func (menu *Menu) Display() error {
+	keys, err := keyboard.GetKeys(1)
+	if err != nil {
+		return err
+	}
+	defer keyboard.Close()
+
+	for {
+		cursor := menu.Print()
+
+		keyEvent := <-keys
+		if keyEvent.Err != nil {
+			return err
+		}
+
+		menu.ResetDisplayCursor(cursor)
+
+		if menu.HandleKeyInput(keyEvent) {
+			return nil
+		}
+	}
+}
 func (menu *Menu) MoveCursorUp() (success bool) {
 	if menu.Focused_Task != &menu.Tasks[0] {
 		for index := range menu.Tasks {
@@ -222,28 +281,8 @@ func (menu *Menu) DefaultKeyPress(event keyboard.KeyEvent) {
 		if event.Rune == 'c' {
 			menu.Focused_Task.Complete = !menu.Focused_Task.Complete
 		}
-	}
-}
-
-func (menu *Menu) Display() error {
-	keys, err := keyboard.GetKeys(1)
-	if err != nil {
-		return err
-	}
-	defer keyboard.Close()
-
-	for {
-		cursor := menu.Print()
-
-		keyEvent := <-keys
-		if keyEvent.Err != nil {
-			return err
-		}
-
-		menu.ResetDisplayCursor(cursor)
-
-		if menu.HandleKeyInput(keyEvent) {
-			return nil
+		if event.Rune == 's' {
+			menu.Focused_Task.SubTasks = append(menu.Focused_Task.SubTasks, Task{})
 		}
 	}
 }
