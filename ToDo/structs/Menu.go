@@ -26,13 +26,12 @@ type Menu struct {
 }
 
 type TaskStrings struct {
-	taskLines    []string
-	descLines    []string
-	subtaskLines []TaskStrings
-	focused      bool
+	taskLines []string
+	descLines []string
+	focused   bool
 }
 
-func (menu *Menu) TaskStrings(task *Task) (taskStrings TaskStrings) {
+func (menu *Menu) TaskStrings(task *Task, indentation int) (taskStrings TaskStrings) {
 	var taskString string
 	var descString string
 	var focused bool
@@ -53,25 +52,31 @@ func (menu *Menu) TaskStrings(task *Task) (taskStrings TaskStrings) {
 		focused = false
 	}
 
+	var taskStyle lipgloss.Style
+	var descStyle lipgloss.Style
+
 	if task.Complete {
-		taskString = lipgloss.JoinHorizontal(lipgloss.Center, style.Defocused_Default_Style.Render(taskString), "{Θ}")
-		descString = style.Defocused_Remark_Style.Render(descString)
+		taskStyle = style.Defocused_Default_Style.Copy()
+		descStyle = style.Defocused_Remark_Style.Copy()
 	} else {
-		taskString = lipgloss.JoinHorizontal(lipgloss.Center, style.Default_Style.Render(taskString), "{ }")
-		descString = style.Remark_Style.Render(descString)
+		taskStyle = style.Default_Style.Copy()
+		descStyle = style.Remark_Style.Copy()
 	}
+	taskStyle.MarginLeft(2 * indentation).Width(taskStyle.GetWidth() - 2*indentation)
+	descStyle.MarginLeft(2 * indentation).Width(descStyle.GetWidth() - 2*indentation)
 
-	var subLines []TaskStrings
-
-	for _, subtask := range task.SubTasks {
-		subLines = append(subLines, menu.TaskStrings(&subtask))
+	if task.Complete {
+		taskString = lipgloss.JoinHorizontal(lipgloss.Center, taskStyle.Render(taskString), style.Green_Style.Render("{C}"))
+		descString = lipgloss.JoinHorizontal(lipgloss.Center, descStyle.Render(descString), style.Light_Green_Style.Render(""))
+	} else {
+		taskString = lipgloss.JoinHorizontal(lipgloss.Center, taskStyle.Render(taskString), style.Amber_Style.Render("{ }"))
+		descString = lipgloss.JoinHorizontal(lipgloss.Center, descStyle.Render(descString), style.Light_Amber_Style.Render(""))
 	}
 
 	return TaskStrings{
-		taskLines:    strings.Split(taskString, "\n"),
-		descLines:    strings.Split(descString, "\n"),
-		subtaskLines: subLines,
-		focused:      focused,
+		taskLines: strings.Split(taskString, "\n"),
+		descLines: strings.Split(descString, "\n"),
+		focused:   focused,
 	}
 }
 
@@ -91,33 +96,14 @@ func (menu *Menu) AppendToLines(lines *[]string, printData TaskStrings) (focused
 	return focusedLine
 }
 
-func (menu *Menu) FormattedPrintLines(tasks *TaskSlice) (lines []string, focusedRow int) {
-	focusedLine := 0
-
+func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focusedRow *int, indentation int) {
 	for i := 0; i < len(*tasks); i++ {
-		printData := menu.TaskStrings(&(*tasks)[i])
+		printData := menu.TaskStrings(&(*tasks)[i], indentation)
 
-		if printData.focused && menu.Editing == Tasks {
-			focusedLine = len(lines)
-		}
+		*focusedRow = max(menu.AppendToLines(lines, printData), *focusedRow)
 
-		lines = append(lines, printData.taskLines...)
-
-		if printData.focused && menu.Editing == Descriptions {
-			focusedLine = len(lines)
-		}
-
-		lines = append(lines, printData.descLines...)
-
-		for _, taskStrings := range printData.subtaskLines {
-			returnedFocusedLine := menu.AppendToLines(&lines, taskStrings)
-
-			focusedLine = max(focusedLine, returnedFocusedLine)
-		}
-
+		menu.FormattedPrintLines(&(*tasks)[i].SubTasks, lines, focusedRow, indentation+1)
 	}
-
-	return lines, focusedLine
 }
 
 func (menu Menu) Print() (cursorRow int) {
@@ -128,7 +114,9 @@ func (menu Menu) Print() (cursorRow int) {
 	}
 
 	// print from startindex, height of at most terminal height
-	lines, focusedLine := menu.FormattedPrintLines(&menu.Tasks)
+	var lines []string
+	var focusedLine int
+	menu.FormattedPrintLines(&menu.Tasks, &lines, &focusedLine, 0)
 
 	printHeight := 0
 	cursorReset := 0
