@@ -20,9 +20,25 @@ const (
 
 type Menu struct {
 	Tasks         TaskSlice
-	Focused_Task  *Task
+	Focused_Task  FocusedTask
 	Editing       EditingField
 	OutputChannel chan []Task
+}
+
+type FocusedTask struct {
+	Task *Task
+	Path FocusedTaskPath
+}
+
+type FocusedTaskPath struct {
+	First *FocusedTaskPathNode
+	Last  *FocusedTaskPathNode
+}
+
+type FocusedTaskPathNode struct {
+	Node *Task
+	Next *FocusedTaskPathNode
+	Prev *FocusedTaskPathNode
 }
 
 type TaskStrings struct {
@@ -31,11 +47,31 @@ type TaskStrings struct {
 	focused   bool
 }
 
+func NewMenu(tasks TaskSlice) (menu *Menu) {
+	taskPointer := &tasks[0]
+	taskNode := FocusedTaskPathNode{
+		Node: &tasks[0],
+		Next: nil,
+	}
+
+	return &Menu{
+		Tasks: tasks,
+		Focused_Task: FocusedTask{
+			Task: taskPointer,
+			Path: FocusedTaskPath{
+				First: &taskNode,
+				Last:  &taskNode,
+			},
+		},
+		Editing: Tasks,
+	}
+}
+
 func (menu *Menu) TaskStrings(task *Task, indentation int) (taskStrings TaskStrings) {
 	var taskString string
 	var descString string
 	var focused bool
-	if menu.Focused_Task == task {
+	if menu.Focused_Task.Task == task {
 		if menu.Editing == Tasks {
 			taskString = "> " + task.Name
 			descString = task.Description
@@ -174,24 +210,70 @@ func (menu *Menu) Display() error {
 		}
 	}
 }
+
+func (menu *Menu) FocusDown(target *Task) {
+	menu.Focused_Task.Path.Last.Next = &FocusedTaskPathNode{
+		Node: target,
+		Prev: menu.Focused_Task.Path.Last,
+	}
+
+	if menu.Focused_Task.Path.First == menu.Focused_Task.Path.Last {
+		menu.Focused_Task.Path.First.Next = menu.Focused_Task.Path.Last.Next
+	}
+
+	menu.Focused_Task.Path.Last = menu.Focused_Task.Path.Last.Next
+
+	menu.Focused_Task.Task = menu.Focused_Task.Path.Last.Node
+}
+
+func (menu *Menu) FocusUp() {
+	menu.Focused_Task.Path.Last = menu.Focused_Task.Path.Last.Prev
+	menu.Focused_Task.Path.Last.Next = nil
+	menu.Focused_Task.Task = menu.Focused_Task.Path.Last.Node
+}
+
 func (menu *Menu) MoveCursorUp() (success bool) {
-	if menu.Focused_Task != &menu.Tasks[0] {
-		for index := range menu.Tasks {
-			if &menu.Tasks[index] == menu.Focused_Task {
-				menu.Focused_Task = &menu.Tasks[index-1]
+	var containerSlice *TaskSlice
+	if menu.Focused_Task.Path.First == menu.Focused_Task.Path.Last {
+		containerSlice = &menu.Tasks
+	} else {
+		containerSlice = &menu.Focused_Task.Path.Last.Prev.Node.SubTasks
+	}
+
+	if menu.Focused_Task.Task != &(*containerSlice)[0] {
+		for index := range *containerSlice {
+			if &((*containerSlice)[index]) == menu.Focused_Task.Task {
+				menu.Focused_Task.Task = &((*containerSlice)[index-1])
+
+				if menu.Focused_Task.Path.First == menu.Focused_Task.Path.Last {
+					menu.Focused_Task.Path.First.Node = menu.Focused_Task.Task
+				}
+				menu.Focused_Task.Path.Last.Node = menu.Focused_Task.Task
+				break
 			}
 		}
 		return true
 	}
-
 	return false
 }
 
 func (menu *Menu) MoveCursorDown() (success bool) {
-	if menu.Focused_Task != &menu.Tasks[len(menu.Tasks)-1] {
-		for index := range menu.Tasks {
-			if &menu.Tasks[index] == menu.Focused_Task {
-				menu.Focused_Task = &menu.Tasks[index+1]
+	var containerSlice *TaskSlice
+	if menu.Focused_Task.Path.First == menu.Focused_Task.Path.Last {
+		containerSlice = &menu.Tasks
+	} else {
+		containerSlice = &menu.Focused_Task.Path.Last.Prev.Node.SubTasks
+	}
+
+	if menu.Focused_Task.Task != &(*containerSlice)[len(*containerSlice)-1] {
+		for index := range *containerSlice {
+			if &((*containerSlice)[index]) == menu.Focused_Task.Task {
+				menu.Focused_Task.Task = &((*containerSlice)[index+1])
+
+				if menu.Focused_Task.Path.First == menu.Focused_Task.Path.Last {
+					menu.Focused_Task.Path.First.Node = menu.Focused_Task.Task
+				}
+				menu.Focused_Task.Path.Last.Node = menu.Focused_Task.Task
 				break
 			}
 		}
@@ -222,6 +304,24 @@ func (menu *Menu) DownKeyPressed() {
 	}
 }
 
+func (menu *Menu) RightKeyPressed() {
+	switch menu.Editing {
+	case Tasks:
+		if len(menu.Focused_Task.Task.SubTasks) != 0 {
+			menu.FocusDown(&menu.Focused_Task.Task.SubTasks[0])
+		}
+	}
+}
+
+func (menu *Menu) LeftKeyPressed() {
+	switch menu.Editing {
+	case Tasks:
+		if menu.Focused_Task.Path.First != menu.Focused_Task.Path.Last {
+			menu.FocusUp()
+		}
+	}
+}
+
 func (menu *Menu) EnterKeyPressed() {
 	switch menu.Editing {
 	case Tasks:
@@ -248,21 +348,21 @@ func (menu *Menu) DefaultKeyPress(event keyboard.KeyEvent) {
 	switch menu.Editing {
 	case Descriptions:
 		if event.Key == keyboard.KeyBackspace {
-			desc := menu.Focused_Task.Description
-			menu.Focused_Task.Description = desc[0:max(len(desc)-1, 0)]
+			desc := menu.Focused_Task.Task.Description
+			menu.Focused_Task.Task.Description = desc[0:max(len(desc)-1, 0)]
 			return
 		} else if event.Key == keyboard.KeySpace {
-			desc := menu.Focused_Task.Description
-			menu.Focused_Task.Description = desc + " "
+			desc := menu.Focused_Task.Task.Description
+			menu.Focused_Task.Task.Description = desc + " "
 			return
 		}
-		menu.Focused_Task.Description += string(event.Rune)
+		menu.Focused_Task.Task.Description += string(event.Rune)
 	case Tasks:
 		if event.Rune == 'c' {
-			menu.Focused_Task.Complete = !menu.Focused_Task.Complete
+			menu.Focused_Task.Task.Complete = !menu.Focused_Task.Task.Complete
 		}
 		if event.Rune == 's' {
-			menu.Focused_Task.SubTasks = append(menu.Focused_Task.SubTasks, Task{})
+			menu.Focused_Task.Task.SubTasks = append([]Task{{}}, menu.Focused_Task.Task.SubTasks...)
 		}
 	}
 }
@@ -273,6 +373,10 @@ func (menu *Menu) HandleKeyInput(event keyboard.KeyEvent) (kill bool) {
 		menu.UpKeyPressed()
 	case keyboard.KeyArrowDown:
 		menu.DownKeyPressed()
+	case keyboard.KeyArrowRight:
+		menu.RightKeyPressed()
+	case keyboard.KeyArrowLeft:
+		menu.LeftKeyPressed()
 	case keyboard.KeyEnter:
 		menu.EnterKeyPressed()
 	case keyboard.KeyEsc:

@@ -5,7 +5,6 @@ package cmd
 
 import (
 	datastore "ToDo/data"
-	debugger "ToDo/debug"
 	"ToDo/structs"
 
 	"github.com/spf13/cobra"
@@ -18,26 +17,16 @@ var readTasksCmd = &cobra.Command{
 	Long:  `Read all stored tasks.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		tasks := datastore.FetchAll()
-		firstTask := &tasks[0]
 
-		menu := structs.Menu{
-			Focused_Task:  firstTask,
-			Tasks:         tasks,
-			OutputChannel: make(chan []structs.Task),
-		}
+		menu := structs.NewMenu(tasks)
 
-		debugger.Trace("starting")
 		go menu.Display()
-		debugger.Trace("finsihed starting")
 
 		for {
-			debugger.Trace("for loop")
 			tasks := <-menu.OutputChannel
 			if tasks != nil {
-				debugger.Trace("overwrote")
 				datastore.SetCache(tasks)
 			} else {
-				debugger.Trace("escaped")
 				break
 			}
 		}
