@@ -52,26 +52,23 @@ func (menu *Menu) TaskStrings(task *Task, indentation int) (taskStrings TaskStri
 		focused = false
 	}
 
-	var taskStyle lipgloss.Style
-	var descStyle lipgloss.Style
-
+	var statusString string
 	if task.Complete {
-		taskStyle = style.Defocused_Default_Style.Copy()
-		descStyle = style.Defocused_Remark_Style.Copy()
+		statusString = "{C}"
 	} else {
-		taskStyle = style.Default_Style.Copy()
-		descStyle = style.Remark_Style.Copy()
+		statusString = "{ }"
 	}
-	taskStyle.MarginLeft(2 * indentation).Width(taskStyle.GetWidth() - 2*indentation)
-	descStyle.MarginLeft(2 * indentation).Width(descStyle.GetWidth() - 2*indentation)
 
-	if task.Complete {
-		taskString = lipgloss.JoinHorizontal(lipgloss.Center, taskStyle.Render(taskString), style.Green_Style.Render("{C}"))
-		descString = lipgloss.JoinHorizontal(lipgloss.Center, descStyle.Render(descString), style.Light_Green_Style.Render(""))
-	} else {
-		taskString = lipgloss.JoinHorizontal(lipgloss.Center, taskStyle.Render(taskString), style.Amber_Style.Render("{ }"))
-		descString = lipgloss.JoinHorizontal(lipgloss.Center, descStyle.Render(descString), style.Light_Amber_Style.Render(""))
-	}
+	taskStyle, taskStatuStyle, descStyle, descStatusStyle := style.GetTaskStyles(indentation, task.Complete)
+
+	taskString = taskStyle.Render(taskString)
+	descString = descStyle.Render(descString)
+
+	taskStatuStyle.Height(lipgloss.Height(taskString))
+	descStatusStyle.Height(lipgloss.Height(descString))
+
+	taskString = lipgloss.JoinHorizontal(lipgloss.Center, taskString, taskStatuStyle.Render(statusString))
+	descString = lipgloss.JoinHorizontal(lipgloss.Center, descString, descStatusStyle.Render(""))
 
 	return TaskStrings{
 		taskLines: strings.Split(taskString, "\n"),

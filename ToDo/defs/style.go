@@ -53,3 +53,25 @@ func init() {
 
 	Light_Green_Style = Green_Style.Copy().Background(lipgloss.Color("#5cbf69"))
 }
+
+func GetTaskStyles(indentation int, taskComplete bool) (taskStyle lipgloss.Style, taskStatusStyle lipgloss.Style, descStyle lipgloss.Style, descStatusStyle lipgloss.Style) {
+	if taskComplete {
+		taskStyle = Defocused_Default_Style.Copy()
+		descStyle = Defocused_Remark_Style.Copy()
+	} else {
+		taskStyle = Default_Style.Copy()
+		descStyle = Remark_Style.Copy()
+	}
+	taskStyle.MarginLeft(2 * indentation).Width(taskStyle.GetWidth() - 2*indentation)
+	descStyle.MarginLeft(2 * indentation).Width(descStyle.GetWidth() - 2*indentation)
+
+	if taskComplete {
+		taskStatusStyle = Green_Style
+		descStatusStyle = Light_Green_Style
+	} else {
+		taskStatusStyle = Amber_Style
+		descStatusStyle = Light_Amber_Style
+	}
+
+	return taskStyle, taskStatusStyle, descStyle, descStatusStyle
+}
