@@ -113,7 +113,7 @@ func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focused
 	}
 }
 
-func (menu Menu) Print() (cursorRow int) {
+func (menu Menu) Print() (printHeight int, cursorReset int) {
 	_, terminalHeight, err := terminal.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
 		fmt.Println("Error while printing.")
@@ -125,8 +125,6 @@ func (menu Menu) Print() (cursorRow int) {
 	var focusedLine int
 	menu.FormattedPrintLines(&menu.Tasks, &lines, &focusedLine, 0)
 
-	printHeight := 0
-	cursorReset := 0
 	if terminalHeight >= len(lines) {
 		// print all lines
 		for index, line := range lines {
@@ -163,8 +161,7 @@ func (menu Menu) Print() (cursorRow int) {
 	}
 
 	// move cursor up to focused Id
-	fmt.Printf("\033[%dF", printHeight-cursorReset)
-	return cursorReset
+	return printHeight, cursorReset
 }
 
 func (menu *Menu) Display() {
@@ -176,7 +173,8 @@ func (menu *Menu) Display() {
 	defer keyboard.Close()
 
 	for {
-		cursor := menu.Print()
+		printHeight, cursor := menu.Print()
+		menu.MoveCursorToFocus(printHeight - cursor)
 
 		keyEvent := <-keys
 		if keyEvent.Err != nil {
@@ -184,11 +182,12 @@ func (menu *Menu) Display() {
 			panic(err)
 		}
 
-		menu.ResetDisplayCursor(cursor)
-
 		if menu.HandleKeyInput(keyEvent) {
+			menu.MoveCursorToEnd(printHeight - cursor)
 			break
 		}
+
+		menu.ResetDisplayCursor(cursor)
 	}
 }
 
@@ -230,6 +229,14 @@ func (menu *Menu) ScrollFocusDown() (success bool) {
 		return true
 	}
 	return false
+}
+
+func (menu *Menu) MoveCursorToFocus(cursorOffset int) {
+	fmt.Printf("\033[%dF", cursorOffset)
+}
+
+func (menu *Menu) MoveCursorToEnd(cursorOffset int) {
+	fmt.Printf("\033[%dE", cursorOffset)
 }
 
 func (menu *Menu) ResetDisplayCursor(cursor int) (success bool) {
@@ -285,7 +292,6 @@ func (menu *Menu) EnterKeyPressed() {
 func (menu *Menu) EscKeyPressed() (kill bool) {
 	switch menu.Editing {
 	case Tasks:
-		fmt.Printf("\033[%dB", 2*len(menu.Tasks))
 		menu.OutputChannel <- nil
 		return true
 	case Descriptions:
