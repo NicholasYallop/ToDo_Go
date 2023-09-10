@@ -46,23 +46,23 @@ func NewMenu(tasks TaskSlice) (menu *Menu) {
 	}
 }
 
-func (menu *Menu) TaskStrings(task *Task, indentation int) (taskStrings TaskStrings) {
+func (menu *Menu) TaskStrings(task *Task, indentation int, collapsed bool) (taskStrings TaskStrings) {
 	var taskString string
 	var descString string
 	var focused bool
 	if menu.Focused_Task.Task == task {
 		if menu.Editing == Tasks {
-			taskString = "> " + task.Name
+			taskString = " " + task.Name
 			descString = task.Description
 		}
 		if menu.Editing == Descriptions {
-			taskString = task.Name
+			taskString = " " + task.Name
 			descString = "> " + task.Description
 		}
 		focused = true
 
 	} else {
-		taskString = task.Name
+		taskString = " " + task.Name
 		descString = task.Description
 		focused = false
 	}
@@ -85,9 +85,14 @@ func (menu *Menu) TaskStrings(task *Task, indentation int) (taskStrings TaskStri
 	taskString = lipgloss.JoinHorizontal(lipgloss.Center, taskString, taskStatuStyle.Render(statusString))
 	descString = lipgloss.JoinHorizontal(lipgloss.Center, descString, descStatusStyle.Render(""))
 
+	descLines := make([]string, 0)
+	if !collapsed {
+		descLines = strings.Split(descString, "\n")
+	}
+
 	return TaskStrings{
 		taskLines: strings.Split(taskString, "\n"),
-		descLines: strings.Split(descString, "\n"),
+		descLines: descLines,
 		focused:   focused,
 	}
 }
@@ -104,8 +109,16 @@ func (menu *Menu) AppendToLines(lines *[]string, printData TaskStrings) (focused
 }
 
 func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focusedRow *int, indentation int) {
+	var collapsed bool
+	parentOfFocusedTask := menu.Focused_Task.Path.Last.Prev
+	if parentOfFocusedTask != nil {
+		collapsed = !(tasks == &parentOfFocusedTask.Node.SubTasks)
+	} else {
+		collapsed = !(tasks == &menu.Tasks)
+	}
+
 	for i := 0; i < len(*tasks); i++ {
-		printData := menu.TaskStrings(&(*tasks)[i], indentation)
+		printData := menu.TaskStrings(&(*tasks)[i], indentation, collapsed)
 
 		*focusedRow = max(menu.AppendToLines(lines, printData), *focusedRow)
 
