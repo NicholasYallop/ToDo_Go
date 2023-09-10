@@ -81,16 +81,11 @@ func (menu *Menu) TaskStrings(task *Task, indentation int) (taskStrings TaskStri
 }
 
 func (menu *Menu) AppendToLines(lines *[]string, printData TaskStrings) (focusedLine int) {
-	if printData.focused && menu.Editing == Tasks {
+	if printData.focused {
 		focusedLine = len(*lines)
 	}
 
 	*lines = append(*lines, printData.taskLines...)
-
-	if printData.focused && menu.Editing == Descriptions {
-		focusedLine = len(*lines)
-	}
-
 	*lines = append(*lines, printData.descLines...)
 
 	return focusedLine
