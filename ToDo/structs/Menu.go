@@ -248,9 +248,19 @@ func (menu *Menu) Display() {
 	}
 	defer keyboard.Close()
 
+	previousPrintHeight := 0
 	for {
 		printHeight, cursor, cursorIndent := menu.Print()
-		menu.MoveCursorToFocus(printHeight-cursor, cursorIndent)
+		if previousPrintHeight > printHeight {
+			fmt.Println("")
+			for i := 0; i < (previousPrintHeight - printHeight - 1); i++ {
+				fmt.Println("\033[2K")
+			}
+			fmt.Print("\033[2K")
+			menu.MoveCursorToFocus(previousPrintHeight-cursor, cursorIndent)
+		} else {
+			menu.MoveCursorToFocus(printHeight-cursor, cursorIndent)
+		}
 
 		keyEvent := <-keys
 		if keyEvent.Err != nil {
@@ -264,6 +274,8 @@ func (menu *Menu) Display() {
 		}
 
 		menu.ResetDisplayCursor(cursor)
+
+		previousPrintHeight = printHeight
 	}
 }
 
