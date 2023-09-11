@@ -113,7 +113,7 @@ func (menu *Menu) AppendToLines(lines *[]string, printData TaskStrings) (focused
 	return focusedLine
 }
 
-func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focusedRow *int, focusedIndentation *int, indentation int) {
+func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focusedRow *int, focusedIndentation *int, requiredLines *[]*string, indentation int, inFocusTree bool) {
 	var collapsed bool
 	parentOfFocusedTask := menu.Focused_Task.Path.Last.Prev
 	if parentOfFocusedTask != nil {
@@ -131,7 +131,21 @@ func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focused
 
 		*focusedRow = max(menu.AppendToLines(lines, printData), *focusedRow)
 
-		menu.FormattedPrintLines(&(*tasks)[i].SubTasks, lines, focusedRow, focusedIndentation, indentation+1)
+		var stillInFocusTree bool
+		if inFocusTree {
+			pointer := menu.Focused_Task.Path.First
+			for pointer != menu.Focused_Task.Path.Last {
+				if pointer.Node == &(*tasks)[i] {
+					stillInFocusTree = true
+					for index := range printData.taskLines {
+						*requiredLines = append(*requiredLines, &printData.taskLines[index])
+					}
+				}
+				pointer = pointer.Next
+			}
+		}
+
+		menu.FormattedPrintLines(&(*tasks)[i].SubTasks, lines, focusedRow, focusedIndentation, requiredLines, indentation+1, stillInFocusTree)
 	}
 }
 
@@ -175,9 +189,10 @@ func (menu Menu) Print() (printHeight int, cursorReset int, cursorIndent int) {
 
 	// print from startindex, height of at most terminal height
 	var lines []string
+	var requiredLines []*string
 	var focusedLine int
 	var focusedIndentation int
-	menu.FormattedPrintLines(&menu.Tasks, &lines, &focusedLine, &focusedIndentation, 0)
+	menu.FormattedPrintLines(&menu.Tasks, &lines, &focusedLine, &focusedIndentation, &requiredLines, 0, true)
 
 	headerString := menu.GetHeaderString()
 	footerString := menu.GetFooterString()
@@ -193,19 +208,25 @@ func (menu Menu) Print() (printHeight int, cursorReset int, cursorIndent int) {
 		printHeight = len(lines) - 1 + lipgloss.Height(footerString) + lipgloss.Height(headerString)
 		cursorReset = focusedLine + lipgloss.Height(headerString)
 
-	} else if focusedLine <= len(lines)-workingHeight {
+	} else if focusedLine <= len(lines)-(workingHeight-len(requiredLines)) {
 		// print from focused up to terminal height
+		for _, line := range requiredLines {
+			fmt.Println(*line)
+		}
 		i := 0
-		for i < workingHeight {
+		for i < workingHeight-len(requiredLines) {
 			fmt.Println(lines[focusedLine+i])
 			i++
 		}
 		printHeight = terminalHeight
-		cursorReset = lipgloss.Height(headerString) + 1
+		cursorReset = lipgloss.Height(headerString) + len(requiredLines) + 1
 
 	} else {
 		// print from end-terminalHeight up to end
-		i := len(lines) - workingHeight
+		for _, line := range requiredLines {
+			fmt.Println(*line)
+		}
+		i := len(lines) - (workingHeight - len(requiredLines))
 		for i < len(lines) {
 			fmt.Println(lines[i])
 			i++
