@@ -135,6 +135,37 @@ func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focused
 	}
 }
 
+func (menu *Menu) GetHeaderString() (header string) {
+	switch menu.Editing {
+	case Tasks:
+		return style.Header_Style.Render("To Do")
+	case Descriptions:
+		return style.Header_Style.Render("descriptions")
+	}
+	return ""
+}
+
+func (menu *Menu) GetFooterString() (footer string) {
+	switch menu.Editing {
+	case Tasks:
+		return style.Footer_Style.Render(
+			style.GetJustifiedString(
+				[]string{
+					"s:add subtask",
+					"󰌑:edit desc",
+				},
+			))
+	case Descriptions:
+		return style.Footer_Style.Render(
+			style.GetJustifiedString(
+				[]string{
+					"󰌑:confirm",
+				},
+			))
+	}
+	return ""
+}
+
 func (menu Menu) Print() (printHeight int, cursorReset int, cursorIndent int) {
 	_, terminalHeight, err := terminal.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
@@ -148,40 +179,42 @@ func (menu Menu) Print() (printHeight int, cursorReset int, cursorIndent int) {
 	var focusedIndentation int
 	menu.FormattedPrintLines(&menu.Tasks, &lines, &focusedLine, &focusedIndentation, 0)
 
-	if terminalHeight >= len(lines) {
-		// print all lines
-		for index, line := range lines {
-			if index == len(lines)-1 {
-				fmt.Print(line)
-			} else {
-				fmt.Println(line)
-			}
-		}
-		printHeight = len(lines) - 1
-		cursorReset = focusedLine
+	headerString := menu.GetHeaderString()
+	footerString := menu.GetFooterString()
+	fmt.Println(headerString)
 
-	} else if focusedLine <= len(lines)-terminalHeight {
+	workingHeight := terminalHeight - lipgloss.Height(footerString) - lipgloss.Height(headerString)
+
+	if workingHeight >= len(lines) {
+		// print all lines
+		for _, line := range lines {
+			fmt.Println(line)
+		}
+		printHeight = len(lines) - 1 + lipgloss.Height(footerString) + lipgloss.Height(headerString)
+		cursorReset = focusedLine + lipgloss.Height(headerString)
+
+	} else if focusedLine <= len(lines)-workingHeight {
 		// print from focused up to terminal height
 		i := 0
-		for i < terminalHeight-1 {
+		for i < workingHeight {
 			fmt.Println(lines[focusedLine+i])
 			i++
 		}
-		fmt.Print(lines[i])
 		printHeight = terminalHeight
-		cursorReset = 0
+		cursorReset = lipgloss.Height(headerString) + 1
 
 	} else {
 		// print from end-terminalHeight up to end
-		i := len(lines) - terminalHeight
-		for i < len(lines)-1 {
+		i := len(lines) - workingHeight
+		for i < len(lines) {
 			fmt.Println(lines[i])
 			i++
 		}
-		fmt.Print(lines[i])
 		printHeight = terminalHeight
-		cursorReset = focusedLine - (len(lines) - terminalHeight) + 1
+		cursorReset = focusedLine - (len(lines) - workingHeight) + lipgloss.Height(headerString) + 1
 	}
+
+	fmt.Print(footerString)
 
 	return printHeight, cursorReset, focusedIndentation
 }
