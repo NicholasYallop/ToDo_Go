@@ -205,8 +205,8 @@ func (menu Menu) Print() (printHeight int, cursorReset int, cursorIndent int) {
 		for _, line := range lines {
 			fmt.Println(line)
 		}
-		printHeight = len(lines) - 1 + lipgloss.Height(footerString) + lipgloss.Height(headerString)
-		cursorReset = focusedLine + lipgloss.Height(headerString)
+		printHeight = len(lines) + lipgloss.Height(footerString) + lipgloss.Height(headerString)
+		cursorReset = focusedLine + lipgloss.Height(headerString) + 1
 
 	} else if focusedLine <= len(lines)-(workingHeight-len(requiredLines)) {
 		// print from focused up to terminal height
@@ -252,6 +252,7 @@ func (menu *Menu) Display() {
 	for {
 		printHeight, cursor, cursorIndent := menu.Print()
 		if previousPrintHeight > printHeight {
+			fmt.Print("cleaned up")
 			fmt.Println("")
 			for i := 0; i < (previousPrintHeight - printHeight - 1); i++ {
 				fmt.Println("\033[2K")
