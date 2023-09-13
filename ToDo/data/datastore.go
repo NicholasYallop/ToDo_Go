@@ -30,8 +30,12 @@ func FetchAll() structs.TaskSlice {
 		fmt.Println("Error reading datastore file")
 		panic(err)
 	}
-
-	tasks_cache = structs.TasksFromJson(content)
+	tasks := structs.TasksFromJson(content)
+	if len(tasks) != 0 {
+		tasks_cache = tasks
+	} else {
+		tasks_cache = []structs.Task{{}}
+	}
 	return tasks_cache
 }
 
