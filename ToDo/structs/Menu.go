@@ -11,11 +11,15 @@ import (
 	"github.com/nerdmaster/terminal"
 )
 
+var stringBuffer string = ""
+
 type EditingField int64
 
 const (
-	Tasks EditingField = iota
+	None EditingField = iota
 	Descriptions
+	Tasks
+	Deleting
 )
 
 type Menu struct {
@@ -41,23 +45,22 @@ func NewMenu(tasks TaskSlice) (menu *Menu) {
 				Last:  &taskNode,
 			},
 		},
-		Editing:       Tasks,
+		Editing:       None,
 		OutputChannel: make(chan []Task),
 	}
 }
 
-func (menu *Menu) TaskStrings(task *Task, indentation int, collapsed bool) (taskStrings TaskStrings, focusedIndentation *int) {
+func (menu *Menu) TaskStrings(task *Task, indentation int, collapsed bool, deleting bool) (taskStrings TaskStrings, focusedIndentation *int) {
 	var taskString string
 	var descString string
 	var focused bool
 	if menu.Focused_Task.Task == task {
-		if menu.Editing == Tasks {
-			taskString = " " + task.Name
-			descString = task.Description
-		}
 		if menu.Editing == Descriptions {
 			taskString = " " + task.Name
 			descString = "> " + task.Description
+		} else {
+			taskString = " " + task.Name
+			descString = task.Description
 		}
 		focused = true
 
@@ -74,7 +77,7 @@ func (menu *Menu) TaskStrings(task *Task, indentation int, collapsed bool) (task
 		statusString = "{ }"
 	}
 
-	taskStyle, taskStatuStyle, descStyle, descStatusStyle := style.GetTaskStyles(indentation, task.Complete)
+	taskStyle, taskStatuStyle, descStyle, descStatusStyle := style.GetTaskStyles(indentation, task.Complete, deleting)
 
 	taskString = taskStyle.Render(taskString)
 	descString = descStyle.Render(descString)
@@ -113,7 +116,7 @@ func (menu *Menu) AppendToLines(lines *[]string, printData TaskStrings) (focused
 	return focusedLine
 }
 
-func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focusedRow *int, focusedIndentation *int, requiredLines *[]*string, indentation int, inFocusTree bool) {
+func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focusedRow *int, focusedIndentation *int, requiredLines *[]*string, indentation int, inFocusTree bool, deleting bool) {
 	var collapsed bool
 	parentOfFocusedTask := menu.Focused_Task.Path.Last.Prev
 	if parentOfFocusedTask != nil {
@@ -123,7 +126,14 @@ func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focused
 	}
 
 	for i := 0; i < len(*tasks); i++ {
-		printData, indent := menu.TaskStrings(&(*tasks)[i], indentation, collapsed)
+		subDeleting := true
+		if !deleting {
+			if !(menu.Editing == Deleting && &(*tasks)[i] == menu.Focused_Task.Task) {
+				subDeleting = false
+			}
+		}
+
+		printData, indent := menu.TaskStrings(&(*tasks)[i], indentation, collapsed, subDeleting)
 
 		if indent != nil {
 			*focusedIndentation = *indent
@@ -145,28 +155,34 @@ func (menu *Menu) FormattedPrintLines(tasks *TaskSlice, lines *[]string, focused
 			}
 		}
 
-		menu.FormattedPrintLines(&(*tasks)[i].SubTasks, lines, focusedRow, focusedIndentation, requiredLines, indentation+1, stillInFocusTree)
+		menu.FormattedPrintLines(&(*tasks)[i].SubTasks, lines, focusedRow, focusedIndentation, requiredLines, indentation+1, stillInFocusTree, subDeleting)
 	}
 }
 
 func (menu *Menu) GetHeaderString() (header string) {
 	switch menu.Editing {
-	case Tasks:
+	case None:
 		return style.Header_Style.Render("To Do")
 	case Descriptions:
-		return style.Header_Style.Render("descriptions")
+		return style.Header_Style.Render("editing description")
+	case Tasks:
+		return style.Header_Style.Render("editing task name")
+	case Deleting:
+		return style.Warning_Header_Style.Render("DELETING")
 	}
 	return ""
 }
 
 func (menu *Menu) GetFooterString() (footer string) {
 	switch menu.Editing {
-	case Tasks:
+	case None:
 		return style.Footer_Style.Render(
 			style.GetJustifiedString(
 				[]string{
 					"s:add subtask",
 					"󰌑:edit desc",
+					"t:rename task",
+					"󱊷:quit",
 				},
 			))
 	case Descriptions:
@@ -174,6 +190,23 @@ func (menu *Menu) GetFooterString() (footer string) {
 			style.GetJustifiedString(
 				[]string{
 					"󰌑:confirm",
+					"󱊷:cancel",
+				},
+			))
+	case Tasks:
+		return style.Footer_Style.Render(
+			style.GetJustifiedString(
+				[]string{
+					"󰌑:confirm",
+					"󱊷:cancel",
+				},
+			))
+	case Deleting:
+		return style.Footer_Style.Render(
+			style.GetJustifiedString(
+				[]string{
+					"󰌑:confirm",
+					"󱊷:cancel",
 				},
 			))
 	}
@@ -192,7 +225,7 @@ func (menu Menu) Print() (printHeight int, cursorReset int, cursorIndent int) {
 	var requiredLines []*string
 	var focusedLine int
 	var focusedIndentation int
-	menu.FormattedPrintLines(&menu.Tasks, &lines, &focusedLine, &focusedIndentation, &requiredLines, 0, true)
+	menu.FormattedPrintLines(&menu.Tasks, &lines, &focusedLine, &focusedIndentation, &requiredLines, 0, true, false)
 
 	headerString := menu.GetHeaderString()
 	footerString := menu.GetFooterString()
@@ -205,8 +238,8 @@ func (menu Menu) Print() (printHeight int, cursorReset int, cursorIndent int) {
 		for _, line := range lines {
 			fmt.Println(line)
 		}
-		printHeight = len(lines) + lipgloss.Height(footerString) + lipgloss.Height(headerString)
-		cursorReset = focusedLine + lipgloss.Height(headerString) + 1
+		printHeight = len(lines) + lipgloss.Height(footerString) + lipgloss.Height(headerString) - 1
+		cursorReset = focusedLine + lipgloss.Height(headerString)
 
 	} else if focusedLine <= len(lines)-(workingHeight-len(requiredLines)) {
 		// print from focused up to terminal height
@@ -252,7 +285,6 @@ func (menu *Menu) Display() {
 	for {
 		printHeight, cursor, cursorIndent := menu.Print()
 		if previousPrintHeight > printHeight {
-			fmt.Print("cleaned up")
 			fmt.Println("")
 			for i := 0; i < (previousPrintHeight - printHeight - 1); i++ {
 				fmt.Println("\033[2K")
@@ -320,6 +352,61 @@ func (menu *Menu) ScrollFocusDown() (success bool) {
 	return false
 }
 
+func (menu *Menu) DeleteFocusedTask() {
+	if menu.Focused_Task.Path.Last.Prev != nil {
+		if len(menu.Focused_Task.Path.Last.Prev.Node.SubTasks) == 1 {
+			menu.Focused_Task.FocusUp()
+			menu.Focused_Task.Task.SubTasks = []Task{}
+		} else {
+			oldPointer := menu.Focused_Task.Task
+			for index := range menu.Focused_Task.Path.Last.Prev.Node.SubTasks {
+				if &menu.Focused_Task.Path.Last.Prev.Node.SubTasks[index] == oldPointer {
+					if index == 0 {
+						menu.Focused_Task.Path.Last.Prev.Node.SubTasks = menu.Focused_Task.Path.Last.Prev.Node.SubTasks[1:]
+						menu.Focused_Task.Path.Last.Node = &menu.Focused_Task.Path.Last.Prev.Node.SubTasks[0]
+						menu.Focused_Task.Task = &menu.Focused_Task.Path.Last.Prev.Node.SubTasks[0]
+					} else if index == len(menu.Focused_Task.Path.Last.Prev.Node.SubTasks)-1 {
+						menu.Focused_Task.Path.Last.Prev.Node.SubTasks = menu.Focused_Task.Path.Last.Prev.Node.SubTasks[:index]
+						menu.Focused_Task.Path.Last.Node = &menu.Focused_Task.Path.Last.Prev.Node.SubTasks[index-1]
+						menu.Focused_Task.Task = &menu.Focused_Task.Path.Last.Prev.Node.SubTasks[index-1]
+					} else {
+						menu.Focused_Task.Path.Last.Prev.Node.SubTasks =
+							append(menu.Focused_Task.Path.Last.Prev.Node.SubTasks[:index], menu.Focused_Task.Path.Last.Prev.Node.SubTasks[index+1:]...)
+						menu.Focused_Task.Path.Last.Node = &menu.Focused_Task.Path.Last.Prev.Node.SubTasks[index]
+						menu.Focused_Task.Task = &menu.Focused_Task.Path.Last.Prev.Node.SubTasks[index]
+					}
+					break
+
+				}
+			}
+		}
+	} else {
+		oldPointer := menu.Focused_Task.Task
+		for index := range menu.Tasks {
+			if &menu.Tasks[index] == oldPointer {
+				if index == 0 {
+					menu.Tasks = menu.Tasks[1:]
+					menu.Focused_Task.Path.First.Node = &menu.Tasks[0]
+					menu.Focused_Task.Path.Last.Node = &menu.Tasks[0]
+					menu.Focused_Task.Task = &menu.Tasks[0]
+				} else if index == len(menu.Tasks)-1 {
+					menu.Tasks = menu.Tasks[:index]
+					menu.Focused_Task.Path.First.Node = &menu.Tasks[index-1]
+					menu.Focused_Task.Path.Last.Node = &menu.Tasks[index-1]
+					menu.Focused_Task.Task = &menu.Tasks[len(menu.Tasks)-1]
+				} else {
+					menu.Tasks =
+						append(menu.Tasks[:index], menu.Tasks[index+1:]...)
+					menu.Focused_Task.Path.First.Node = &menu.Tasks[index]
+					menu.Focused_Task.Path.Last.Node = &menu.Tasks[index]
+					menu.Focused_Task.Task = &menu.Tasks[index]
+				}
+				break
+			}
+		}
+	}
+}
+
 func (menu *Menu) MoveCursorToFocus(cursorOffset int, cursorIndent int) {
 	if cursorOffset != 0 {
 		fmt.Printf("\033[%dF", cursorOffset)
@@ -343,21 +430,21 @@ func (menu *Menu) ResetDisplayCursor(cursor int) (success bool) {
 
 func (menu *Menu) UpKeyPressed() {
 	switch menu.Editing {
-	case Tasks:
+	case None:
 		menu.ScrollFocusUp()
 	}
 }
 
 func (menu *Menu) DownKeyPressed() {
 	switch menu.Editing {
-	case Tasks:
+	case None:
 		menu.ScrollFocusDown()
 	}
 }
 
 func (menu *Menu) RightKeyPressed() {
 	switch menu.Editing {
-	case Tasks:
+	case None:
 		if len(menu.Focused_Task.Task.SubTasks) != 0 {
 			menu.Focused_Task.FocusDown(&menu.Focused_Task.Task.SubTasks[0])
 		}
@@ -366,7 +453,7 @@ func (menu *Menu) RightKeyPressed() {
 
 func (menu *Menu) LeftKeyPressed() {
 	switch menu.Editing {
-	case Tasks:
+	case None:
 		if menu.Focused_Task.Path.First != menu.Focused_Task.Path.Last {
 			menu.Focused_Task.FocusUp()
 		}
@@ -375,27 +462,61 @@ func (menu *Menu) LeftKeyPressed() {
 
 func (menu *Menu) EnterKeyPressed() {
 	switch menu.Editing {
-	case Tasks:
+	case None:
+		stringBuffer = menu.Focused_Task.Task.Description
 		menu.Editing = Descriptions
 	case Descriptions:
 		menu.OutputChannel <- menu.Tasks
-		menu.Editing = Tasks
+		stringBuffer = ""
+		menu.Editing = None
+	case Tasks:
+		menu.OutputChannel <- menu.Tasks
+		stringBuffer = ""
+		menu.Editing = None
+	case Deleting:
+		menu.DeleteFocusedTask()
+		menu.OutputChannel <- menu.Tasks
+		menu.Editing = None
 	}
 }
 
 func (menu *Menu) EscKeyPressed() (kill bool) {
 	switch menu.Editing {
-	case Tasks:
+	case None:
 		menu.OutputChannel <- nil
 		return true
 	case Descriptions:
-		menu.Editing = Tasks
+		menu.Focused_Task.Task.Description = stringBuffer
+		stringBuffer = ""
+		menu.Editing = None
+	case Tasks:
+		menu.Focused_Task.Task.Name = stringBuffer
+		stringBuffer = ""
+		menu.Editing = None
+	case Deleting:
+		menu.Editing = None
 	}
 	return false
 }
 
 func (menu *Menu) DefaultKeyPress(event keyboard.KeyEvent) {
 	switch menu.Editing {
+	case None:
+		switch event.Rune {
+		case 'c':
+			menu.Focused_Task.Task.Complete = !menu.Focused_Task.Task.Complete
+		case 's':
+			menu.Focused_Task.Task.SubTasks = append([]Task{{}}, menu.Focused_Task.Task.SubTasks...)
+			menu.Focused_Task.FocusDown(&menu.Focused_Task.Task.SubTasks[0])
+			menu.OutputChannel <- menu.Tasks
+			stringBuffer = menu.Focused_Task.Task.Name
+			menu.Editing = Tasks
+		case 't':
+			stringBuffer = menu.Focused_Task.Task.Name
+			menu.Editing = Tasks
+		case 'd':
+			menu.Editing = Deleting
+		}
 	case Descriptions:
 		if event.Key == keyboard.KeyBackspace {
 			desc := menu.Focused_Task.Task.Description
@@ -408,13 +529,16 @@ func (menu *Menu) DefaultKeyPress(event keyboard.KeyEvent) {
 		}
 		menu.Focused_Task.Task.Description += string(event.Rune)
 	case Tasks:
-		if event.Rune == 'c' {
-			menu.Focused_Task.Task.Complete = !menu.Focused_Task.Task.Complete
+		if event.Key == keyboard.KeyBackspace {
+			name := menu.Focused_Task.Task.Name
+			menu.Focused_Task.Task.Name = name[0:max(len(name)-1, 0)]
+			return
+		} else if event.Key == keyboard.KeySpace {
+			name := menu.Focused_Task.Task.Name
+			menu.Focused_Task.Task.Name = name + " "
+			return
 		}
-		if event.Rune == 's' {
-			menu.Focused_Task.Task.SubTasks = append([]Task{{}}, menu.Focused_Task.Task.SubTasks...)
-			menu.OutputChannel <- menu.Tasks
-		}
+		menu.Focused_Task.Task.Name += string(event.Rune)
 	}
 }
 

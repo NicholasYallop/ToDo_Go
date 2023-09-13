@@ -6,6 +6,9 @@ import (
 
 var Header_Style lipgloss.Style
 var Footer_Style lipgloss.Style
+var Warning_Header_Style lipgloss.Style
+var Warning_Task_Style lipgloss.Style
+var Warning_Desc_Style lipgloss.Style
 
 var Default_Style lipgloss.Style
 var Remark_Style lipgloss.Style
@@ -61,15 +64,37 @@ func init() {
 		Foreground(lipgloss.Color("#ffffff"))
 
 	Light_Green_Style = Green_Style.Copy().Background(lipgloss.Color("#5cbf69"))
+
+	Warning_Header_Style = lipgloss.NewStyle().
+		Width(Print_Width).
+		Background(lipgloss.Color("#e60b0b")).
+		Foreground(lipgloss.Color("#ffffff")).
+		Align(lipgloss.Center)
+
+	Warning_Task_Style = lipgloss.NewStyle().
+		Width(Print_Width).
+		Background(lipgloss.Color("#e60b0b")).
+		Foreground(lipgloss.Color("#ffffff"))
+
+	Warning_Desc_Style = lipgloss.NewStyle().
+		Width(Print_Width).
+		Background(lipgloss.Color("#bf3232")).
+		Foreground(lipgloss.Color("#ffffff"))
+
 }
 
-func GetTaskStyles(indentation int, taskComplete bool) (taskStyle lipgloss.Style, taskStatusStyle lipgloss.Style, descStyle lipgloss.Style, descStatusStyle lipgloss.Style) {
-	if taskComplete {
-		taskStyle = Defocused_Default_Style.Copy()
-		descStyle = Defocused_Remark_Style.Copy()
+func GetTaskStyles(indentation int, taskComplete bool, deleting bool) (taskStyle lipgloss.Style, taskStatusStyle lipgloss.Style, descStyle lipgloss.Style, descStatusStyle lipgloss.Style) {
+	if deleting {
+		taskStyle = Warning_Task_Style.Copy()
+		descStyle = Warning_Desc_Style.Copy()
 	} else {
-		taskStyle = Default_Style.Copy()
-		descStyle = Remark_Style.Copy()
+		if taskComplete {
+			taskStyle = Defocused_Default_Style.Copy()
+			descStyle = Defocused_Remark_Style.Copy()
+		} else {
+			taskStyle = Default_Style.Copy()
+			descStyle = Remark_Style.Copy()
+		}
 	}
 	taskStyle.MarginLeft(2 * indentation).Width(taskStyle.GetWidth() - 2*indentation)
 	descStyle.MarginLeft(2 * indentation).Width(descStyle.GetWidth() - 2*indentation)
@@ -85,70 +110,101 @@ func GetTaskStyles(indentation int, taskComplete bool) (taskStyle lipgloss.Style
 	return taskStyle, taskStatusStyle, descStyle, descStatusStyle
 }
 
-func GetJustifiedString(fragments []string) (justifiedString string) {
-	returnString := ""
-	currentLength := 0
-	lineStart := 0
-
-	totalWidth := Print_Width + Complete_Column_Width
-	for index, string := range fragments {
-		if currentLength+len(string) == totalWidth {
-			if len(returnString) != 0 {
-				returnString += "\n"
+func GetJustifiedString(words []string) (justifiedString string) {
+	maxWidth := Print_Width + Complete_Column_Width
+	lineStartIndex := 0
+	lineLength := 0
+	var strs []string
+	i := 0
+	for i < len(words) {
+		if lineLength+len(words[i]) < maxWidth {
+			// word and space leaves space to fill
+			// or is end of line
+			lineLength += len(words[i]) + 1
+			i++
+		} else if lineLength+len(words[i]) == maxWidth {
+			// addition of word takes us to end
+			// no justification required
+			line := ""
+			for j := lineStartIndex; j < i; j++ {
+				line += words[j] + " "
 			}
-
-			for i := lineStart; i < index; i++ {
-				returnString += fragments[i] + " "
-			}
-			returnString += fragments[index]
-			lineStart = index + 1
-			currentLength = 0
-		} else if totalWidth-currentLength < len(string) {
-			// justify line buffer
-			if len(returnString) != 0 {
-				returnString += "\n"
-			}
-			spaceToFill := totalWidth + Complete_Column_Width - currentLength
-			spaces := ""
-			if index-1 != lineStart {
-				for n := 0; n <= spaceToFill/(index-lineStart-1); n++ {
-					spaces += " "
-				}
-			}
-
-			for i := lineStart; i < index-1; i++ {
-				returnString += fragments[i] + spaces
-				if i-lineStart < (totalWidth-currentLength)%(index-lineStart-1) {
-					returnString += " "
-				}
-			}
-
-			returnString += fragments[index-1]
-
-			lineStart = index
-			currentLength = 0
+			strs = append(strs, (line + words[i]))
+			lineStartIndex = i + 1
+			lineLength = 0
+			i++
 		} else {
-			currentLength += len(fragments[index])
-		}
-	}
-
-	if len(returnString) != 0 {
-		returnString += "\n"
-	}
-	spaceToFill := totalWidth - currentLength
-	spaces := ""
-	if lineStart != len(fragments)-1 {
-		for n := 0; n <= spaceToFill/(len(fragments)-lineStart-1); n++ {
-			spaces += " "
-		}
-
-		for i := lineStart; i < len(fragments)-1; i++ {
-			returnString += fragments[i] + spaces
-			if i-lineStart < (totalWidth-currentLength)%(len(fragments)-lineStart) {
-				returnString += " "
+			// addition of word takes us past end
+			// justify line buffer
+			numWords := i - lineStartIndex
+			numSpaces := numWords - 1
+			if numSpaces == 0 {
+				line := words[i-1]
+				for len(line) < maxWidth {
+					line += " "
+				}
+				strs = append(strs, (line))
+			} else {
+				spacesToAdd := (maxWidth - (lineLength - numWords))
+				j := 0
+				line := ""
+				spaces := ""
+				for j < spacesToAdd/numSpaces {
+					spaces += " "
+					j++
+				}
+				j = 0
+				for j < numWords-1 {
+					line += words[j+lineStartIndex] + spaces
+					if j < spacesToAdd%numSpaces {
+						line += " "
+					}
+					j++
+				}
+				strs = append(strs, (line + words[j+lineStartIndex]))
 			}
+			lineStartIndex = i
+			lineLength = 0
 		}
 	}
-	returnString += fragments[len(fragments)-1]
+	if lineStartIndex != len(words) {
+		// we have words in buffer
+		numWords := i - lineStartIndex
+		numSpaces := numWords - 1
+		if numSpaces == 0 {
+			line := words[i-1]
+			for len(line) < maxWidth {
+				line += " "
+			}
+			strs = append(strs, (line))
+		} else {
+			spacesToAdd := (maxWidth - (lineLength - numWords))
+			j := 0
+			line := ""
+			spaces := ""
+			for j < spacesToAdd/numSpaces {
+				spaces += " "
+				j++
+			}
+			j = 0
+			for j < numWords-1 {
+				line += words[j+lineStartIndex] + spaces
+				if j < spacesToAdd%numSpaces {
+					line += " "
+				}
+				j++
+			}
+			strs = append(strs, (line + words[j+lineStartIndex]))
+		}
+	}
+	returnString := ""
+	for index := range strs {
+		if index == len(strs)-1 {
+			returnString += strs[index]
+		} else {
+			returnString += strs[index] + "\n"
+		}
+	}
+
 	return returnString
 }
