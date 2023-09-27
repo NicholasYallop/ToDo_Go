@@ -28,7 +28,8 @@ func init() {
 		Background(lipgloss.Color("#5f2485")).
 		Foreground(lipgloss.Color("#ffffff")).
 		Width(Print_Width + Complete_Column_Width).
-		Align(lipgloss.Center)
+		Align(lipgloss.Center).
+		Bold(true)
 
 	Footer_Style = lipgloss.NewStyle().
 		Background(lipgloss.Color("#050000")).
@@ -39,15 +40,16 @@ func init() {
 	Default_Style = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FAFAFA")).
 		Background(lipgloss.Color("#8662f5")).
-		Width(Print_Width)
+		Width(Print_Width).
+		Bold(true)
 
 	Defocused_Default_Style = Default_Style.Copy().Background(lipgloss.Color("#616362"))
 
 	Remark_Style = lipgloss.NewStyle().
 		Width(Print_Width).
 		Italic(true).
-		Foreground(lipgloss.Color("#c1becc")).
-		Background(lipgloss.Color("#a68df2"))
+		Foreground(lipgloss.Color("#2b3233")).
+		Background(lipgloss.Color("#beabf5"))
 
 	Defocused_Remark_Style = Remark_Style.Copy().Background(lipgloss.Color("#747575"))
 
