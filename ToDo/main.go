@@ -4,11 +4,24 @@ Copyright © 2023 nick yallop
 package main
 
 import (
-	"ToDo/cmd"
 	datastore "ToDo/data"
+	"ToDo/structs"
 )
 
 func main() {
-	cmd.Execute()
+	tasks := datastore.FetchAll()
 	defer datastore.SaveCache()
+
+	menu := structs.NewMenu(tasks)
+
+	go menu.Display()
+
+	for {
+		tasks := <-menu.OutputChannel
+		if tasks != nil {
+			datastore.SetCache(tasks)
+		} else {
+			break
+		}
+	}
 }
