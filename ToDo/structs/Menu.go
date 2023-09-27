@@ -187,8 +187,10 @@ func (menu *Menu) GetFooterString() (footer string) {
 			style.GetJustifiedString(
 				[]string{
 					"s:add subtask",
-					"󰌑:edit desc",
 					"t:rename task",
+					"a:add task",
+					"󰌑:edit desc",
+					"d:delete tasks",
 					"󱊷:quit",
 				},
 			))
