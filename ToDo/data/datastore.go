@@ -7,7 +7,15 @@ import (
 )
 
 var tasks_cache structs.TaskSlice = nil
-var datastore_path string = "./data/data.json"
+var datastore_path string
+
+func init() {
+	localappdata, err := os.UserCacheDir()
+	if err != nil {
+		panic(err)
+	}
+	datastore_path = localappdata + "/todo/data.json"
+}
 
 func AddToCache(task structs.Task) {
 	if tasks_cache == nil {
@@ -27,8 +35,8 @@ func FetchAll() structs.TaskSlice {
 
 	content, err := os.ReadFile(datastore_path)
 	if err != nil {
-		fmt.Println("Error reading datastore file")
-		panic(err)
+		tasks_cache = []structs.Task{{}}
+		return tasks_cache
 	}
 	tasks := structs.TasksFromJson(content)
 	if len(tasks) != 0 {
